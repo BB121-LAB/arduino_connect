@@ -1,6 +1,6 @@
 all:
 	make premake
-	python3 -m PyInstaller --onedir ard_connect.py 
+	python3 -m PyInstaller --windowed --onedir ard_connect.py 
 onefile:
 	make premake
 	python3 -m PyInstaller --onefile ard_connect.py
