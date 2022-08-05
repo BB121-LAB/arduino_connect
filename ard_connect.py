@@ -25,11 +25,13 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from connect import Ui_MainWindow
 import serial, time, pynput, sys
 import serial.tools.list_ports
+import images_qr
 
 class Window(QtWidgets.QMainWindow, Ui_MainWindow):
     def __init__(self, *args, obj=None, **kwargs):
         super(Window, self).__init__(*args, **kwargs)
         self.setupUi(self)
+        self.setWindowIcon(QtGui.QIcon(':/icon/icon.png'))
 
         # Button choices
         self.current_key = None
