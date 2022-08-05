@@ -1,6 +1,6 @@
 all:
 	make premake
-	python3 -m PyInstaller --name="Arduino Connect" --windowed --onedir --icon=icon/icon.png ard_connect.py 
+	python3 -m PyInstaller --clean --name="Arduino Connect" --windowed --onedir --icon=icon/icon.png ard_connect.py 
 onefile:
 	make premake
 	python3 -m PyInstaller --onefile ard_connect.py
