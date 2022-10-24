@@ -25,19 +25,26 @@ from connect import Ui_MainWindow
 import serial, pynput, sys
 import serial.tools.list_ports
 import logging
+from graph import GraphWindow
+
 
 # local includes
 import images_qr
 import log_system
+import graph_ui
 
 VERSION = "v1.0.1"
 LOG_LEVEL = logging.DEBUG
+
 
 class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
     def __init__(self, *args, obj=None, **kwargs):
         super(ArdConnect, self).__init__(*args, **kwargs)
         self.setupUi(self)
         self.setWindowIcon(QtGui.QIcon(':/icon/icon.png'))
+
+        # graph window if needed
+        self.graph = None
 
         # Button choices
         self.current_key = None
@@ -101,8 +108,15 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.button_pause.setEnabled(False)
                 self.button_run.setEnabled(True)
                 self.port_timer.stop()
+                self.raw_out_checkbox.setEnabled(False)
                 self.ui_status_update("Connected")
                 logging.info(f"Device connected: {self.com_port}")
+                if self.raw_out_checkbox.isChecked():
+                    self.ser.write('WAVE'.encode())
+                    self.graph = GraphWindow()
+                    self.graph.show()
+                else:
+                    self.ser.write('NORMAL'.encode())
             except Exception as e:
                 self.com_port = ''
                 logging.warning(f"Connection Error: {e}")
@@ -112,15 +126,20 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.dropdown_port.setEnabled(True)
                 self.button_refresh.setEnabled(True) 
                 self.frame_run_pause.setEnabled(False)   
+                self.raw_out_checkbox.setEnabled(True)
                 self.port_timer.start(10000)
                 self.ui_com_refresh()     
         else:
-            if(self.timer.isActive()):
+            if not self.graph is None:
+                del self.graph
+                self.graph = None
+            if self.timer.isActive():
                 self.ui_pause()
             self.ser.close()
             self.dropdown_port.setEnabled(True)
             self.button_refresh.setEnabled(True) 
             self.frame_run_pause.setEnabled(False)   
+            self.raw_out_checkbox.setEnabled(True)
             self.port_timer.start(10000) 
             self.ui_com_refresh()     
             self.ui_status_update("Disconnected")    
@@ -171,14 +190,17 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
     def serial_update(self):
         try:
             if self.ser.in_waiting:
-                i = self.ser.readline().decode('UTF-8').strip('\n')
-                if i == 'T':
-                    self.keysend()
+                if self.raw_out_checkbox.isChecked():
+                    i = self.ser.readline().decode('UTF-8').strip('\n')
+                    if i == 'T':
+                        self.keysend()
+                else:
+                    raise NotImplementedError("Method for packet capturing goes here.")
         except OSError as e:
             logging.warning(e)
             self.ui_display_error_message("Device Disconnected", f"The USB device has been disconnected.\n{e}")
             self.ui_com_connect()
-    
+
     def ui_run(self):
         self.button_pause.setEnabled(True)
         self.button_run.setEnabled(False)

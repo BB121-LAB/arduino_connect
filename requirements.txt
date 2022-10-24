@@ -2,3 +2,4 @@ pyserial
 pynput
 PyQT5
 Pillow
+pyqtgraph
