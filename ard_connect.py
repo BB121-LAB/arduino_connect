@@ -25,6 +25,7 @@ from connect import Ui_MainWindow
 import serial, pynput, sys
 import serial.tools.list_ports
 import logging
+import time
 from graph import GraphWindow
 
 
@@ -33,7 +34,7 @@ import images_qr
 import log_system
 import graph_ui
 
-VERSION = "v1.0.1"
+VERSION = "v1.1.0-a.1"
 LOG_LEVEL = logging.DEBUG
 
 
@@ -99,6 +100,7 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
     def ui_com_connect(self):
         if not self.ser.isOpen():
             try:
+                self.ui_status_update("Connecting...")
                 self.com_port = self.dropdown_port.currentText()
                 self.ser = serial.Serial(self.com_port, 115200)
                 self.button_connect.setText("Disconnect")
@@ -110,13 +112,38 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.port_timer.stop()
                 self.raw_out_checkbox.setEnabled(False)
                 self.ui_status_update("Connected")
+                self.ser.flush()
                 logging.info(f"Device connected: {self.com_port}")
                 if self.raw_out_checkbox.isChecked():
-                    self.ser.write('WAVE'.encode())
                     self.graph = GraphWindow()
                     self.graph.show()
-                else:
-                    self.ser.write('NORMAL'.encode())
+                connect_attempts = 3
+                while True:
+                    self.ser.flushInput()
+                    print("Sending mode...")
+                    if self.raw_out_checkbox.isChecked():
+                        self.ser.write('WAVE\r\n'.encode('UTF-8'))
+                        self.ser.flushOutput()                  
+                        time.sleep(1)
+                    else:
+                        self.ser.write('NORMAL\r\n'.encode('UTF-8'))
+                        self.ser.flushOutput()
+                        time.sleep(1)
+                    if self.ser.in_waiting:
+                        response = self.ser.read_all().decode('UTF-8').strip('\r\n')
+                        print(response)
+                        if "INVALID" in response:
+                            continue
+                        break
+                    connect_attempts -= 1
+                    if connect_attempts <= 0:
+                        print("Resetting serial device...")
+                        self.ser.close()
+                        self.ser = serial.Serial(self.com_port, 115200)
+                        connect_attempts = 3
+                        time.sleep(2)
+                        continue
+
             except Exception as e:
                 self.com_port = ''
                 logging.warning(f"Connection Error: {e}")
@@ -189,13 +216,35 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
         
     def serial_update(self):
         try:
-            if self.ser.in_waiting:
-                if self.raw_out_checkbox.isChecked():
+            if not self.raw_out_checkbox.isChecked():
+                if self.ser.in_waiting:
                     i = self.ser.readline().decode('UTF-8').strip('\n')
                     if i == 'T':
                         self.keysend()
-                else:
-                    raise NotImplementedError("Method for packet capturing goes here.")
+            else:
+
+                self.ser.write('\n'.encode())
+
+                # get response from Arduino, terminated by newline character
+                buf = ''
+
+                # read and discard incoming bytes until the start character is found
+                while self.ser.inWaiting() > 0:
+                    chr = str(self.ser.read().decode())
+                    if chr == '$':
+                        break
+
+                # read characters until newline is detected, this is faster than serial's read_until
+                while self.ser.inWaiting() > 0:
+                    chr = str(self.ser.read().decode())
+                    if chr == '\n':
+                        break
+                    buf = buf + chr
+                if len(buf) != 3:
+                    return
+                current_reading = int(buf)
+                self.graph.add_data(current_reading)
+
         except OSError as e:
             logging.warning(e)
             self.ui_display_error_message("Device Disconnected", f"The USB device has been disconnected.\n{e}")
@@ -206,7 +255,7 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
         self.button_run.setEnabled(False)
         self.dropdown_key.setEnabled(False)
         self.ui_status_update("Running")
-        self.timer.start(100)
+        self.timer.start(25)
     
     def ui_pause(self):
         self.button_pause.setEnabled(False)

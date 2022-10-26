@@ -23,7 +23,7 @@ class GraphWindow(QtWidgets.QDialog, graph_ui.Ui_Graph):
         self.green_pen = pg.mkPen('g', width = 2)
 
         # graph data
-        self._graph_max_size = 1000
+        self._graph_max_size = 250
         self._data_index = 0
         self._data = numpy.zeros(self._graph_max_size)
         
@@ -33,11 +33,8 @@ class GraphWindow(QtWidgets.QDialog, graph_ui.Ui_Graph):
         # start timer
         self.graph_timer.start(self.graph_timer_ms)
 
-    @property
-    def data(self):
-        return self._data
-    @data.setter
-    def data(self, value):
+
+    def add_data(self, value):
         self._data[self._data_index] = value
         self._data_index = (self._data_index + 1) % self._graph_max_size
         if self._data_index == 0:
