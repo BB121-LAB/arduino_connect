@@ -28,11 +28,18 @@ import logging
 import time
 from graph import GraphWindow
 
+try:
+    # manual includes to fix occasional compile problem
+    from pyqtgraph.graphicsItems.ViewBox.axisCtrlTemplate_pyqt5 import *
+    from pyqtgraph.graphicsItems.PlotItem.plotConfigTemplate_pyqt5 import *
+    from pyqtgraph.imageview.ImageViewTemplate_pyqt5 import *
+    from pyqtgraph.console.template_pyqt5 import *
+except:
+    pass
 
 # local includes
 import images_qr
 import log_system
-import graph_ui
 
 VERSION = "v1.1.0-a.1"
 LOG_LEVEL = logging.DEBUG
