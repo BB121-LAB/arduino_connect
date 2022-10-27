@@ -41,7 +41,7 @@ except:
 import images_qr
 import log_system
 
-VERSION = "v1.1.0-a.1"
+VERSION = "v1.1.0-a.2"
 LOG_LEVEL = logging.DEBUG
 
 
@@ -125,15 +125,16 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
                     self.graph = GraphWindow()
                     self.graph.show()
                 connect_attempts = 3
+                time.sleep(2)
                 while True:
                     self.ser.flushInput()
                     print("Sending mode...")
                     if self.raw_out_checkbox.isChecked():
-                        self.ser.write('WAVE\r\n'.encode('UTF-8'))
+                        self.ser.write('$WAVE\n'.encode('UTF-8'))
                         self.ser.flushOutput()                  
                         time.sleep(1)
                     else:
-                        self.ser.write('NORMAL\r\n'.encode('UTF-8'))
+                        self.ser.write('$NORMAL\n'.encode('UTF-8'))
                         self.ser.flushOutput()
                         time.sleep(1)
                     if self.ser.in_waiting:
