@@ -41,7 +41,7 @@ except:
 import images_qr
 import log_system
 
-VERSION = "v1.1.0-a.2"
+VERSION = "v1.1.0-a.3"
 LOG_LEVEL = logging.DEBUG
 
 
