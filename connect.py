@@ -14,8 +14,8 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
-        MainWindow.resize(1045, 344)
-        MainWindow.setMinimumSize(QtCore.QSize(1045, 344))
+        MainWindow.resize(1045, 415)
+        MainWindow.setMinimumSize(QtCore.QSize(1045, 415))
         MainWindow.setMaximumSize(QtCore.QSize(9999, 9999))
         self.centralwidget = QtWidgets.QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
@@ -29,7 +29,7 @@ class Ui_MainWindow(object):
         self.gridLayout = QtWidgets.QGridLayout()
         self.gridLayout.setObjectName("gridLayout")
         self.vertframe = QtWidgets.QFrame(self.horizontalFrame)
-        self.vertframe.setMinimumSize(QtCore.QSize(384, 90))
+        self.vertframe.setMinimumSize(QtCore.QSize(384, 105))
         self.vertframe.setMaximumSize(QtCore.QSize(384, 90))
         self.vertframe.setFrameShape(QtWidgets.QFrame.Box)
         self.vertframe.setObjectName("vertframe")
