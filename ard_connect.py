@@ -26,7 +26,8 @@ import serial, pynput, sys
 import serial.tools.list_ports
 import logging
 import time
-from graph import GraphWindow
+import numpy
+import pyqtgraph as pg
 
 try:
     # manual includes to fix occasional compile problem
@@ -41,7 +42,7 @@ except:
 import images_qr
 import log_system
 
-VERSION = "v1.1.0-a.3"
+VERSION = "v1.1.0-a.4"
 LOG_LEVEL = logging.DEBUG
 
 
@@ -51,13 +52,10 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
         self.setupUi(self)
         self.setWindowIcon(QtGui.QIcon(':/icon/icon.png'))
 
-        # graph window if needed
-        self.graph = None
-
         # Button choices
         self.current_key = None
         self.button_choices = {
-            "Spacebar"    : pynput.keyboard.Key.space,
+            "Spacebar (default)"    : pynput.keyboard.Key.space,
             "Left Click"  : pynput.mouse.Button.left,
             "Right Click" : pynput.mouse.Button.right,
             "Arrow Up"    : pynput.keyboard.Key.up,
@@ -89,7 +87,7 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
         self.com_port = ''
         
         # disable controls until connected
-        self.frame_run_pause.setEnabled(False)
+        self.frame_run_pause_2.setEnabled(False)
         
         # perform an initial port check
         self.ui_com_refresh()
@@ -103,6 +101,27 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
         self.port_timer = QtCore.QTimer()
         self.port_timer.timeout.connect(self.ui_com_refresh)
         self.port_timer.start(10000)
+
+        # graph timer
+        self.graph_timer = QtCore.QTimer()
+        self.graph_timer.timeout.connect(self.draw_graphs)
+        self.graph_frame_rate = 30
+        self.graph_timer_ms = int(1 / (self.graph_frame_rate / 1000))
+
+        # graph properties
+        self.graph.showGrid(True, True, alpha = 0.5)
+        self.graph_padding_factor = 0.667
+        self.green_pen = pg.mkPen('g', width = 2)
+
+        # graph data
+        self._graph_max_size = 250
+        self._data_index = 0
+        self._data = numpy.zeros(self._graph_max_size)
+        
+        # set curve
+        self.graph_reset()
+        self.graph.disableAutoRange()
+
         
     def ui_com_connect(self):
         if not self.ser.isOpen():
@@ -113,23 +132,23 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.button_connect.setText("Disconnect")
                 self.dropdown_port.setEnabled(False)
                 self.button_refresh.setEnabled(False)
-                self.frame_run_pause.setEnabled(True)
                 self.button_pause.setEnabled(False)
                 self.button_run.setEnabled(True)
                 self.port_timer.stop()
-                self.raw_out_checkbox.setEnabled(False)
+                self.radioButton_graph.setEnabled(False)
                 self.ui_status_update("Connected")
                 self.ser.flush()
                 logging.info(f"Device connected: {self.com_port}")
-                if self.raw_out_checkbox.isChecked():
-                    self.graph = GraphWindow()
-                    self.graph.show()
+                if self.radioButton_graph.isChecked():
+                    self.graph_timer.start(self.graph_timer_ms)      
+                else:
+                    self.frame_run_pause_2.setEnabled(True)              
                 connect_attempts = 3
                 time.sleep(2)
                 while True:
                     self.ser.flushInput()
                     print("Sending mode...")
-                    if self.raw_out_checkbox.isChecked():
+                    if self.radioButton_graph.isChecked():
                         self.ser.write('$WAVE\n'.encode('UTF-8'))
                         self.ser.flushOutput()                  
                         time.sleep(1)
@@ -151,6 +170,9 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
                         connect_attempts = 3
                         time.sleep(2)
                         continue
+                if self.radioButton_graph.isChecked():
+                    self.ui_run()
+                    self.graph_zoom_frame.setEnabled(True)
 
             except Exception as e:
                 self.com_port = ''
@@ -160,21 +182,20 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.button_connect.setText("Connect")
                 self.dropdown_port.setEnabled(True)
                 self.button_refresh.setEnabled(True) 
-                self.frame_run_pause.setEnabled(False)   
-                self.raw_out_checkbox.setEnabled(True)
+                self.frame_run_pause_2.setEnabled(False)   
+                self.radioButton_graph.setEnabled(True)
                 self.port_timer.start(10000)
                 self.ui_com_refresh()     
         else:
-            if not self.graph is None:
-                del self.graph
-                self.graph = None
+            self.graph_timer.stop()
             if self.timer.isActive():
                 self.ui_pause()
+                self.graph_zoom_frame.setEnabled(False)
             self.ser.close()
             self.dropdown_port.setEnabled(True)
             self.button_refresh.setEnabled(True) 
-            self.frame_run_pause.setEnabled(False)   
-            self.raw_out_checkbox.setEnabled(True)
+            self.frame_run_pause_2.setEnabled(False)   
+            self.radioButton_graph.setEnabled(True)
             self.port_timer.start(10000) 
             self.ui_com_refresh()     
             self.ui_status_update("Disconnected")    
@@ -220,17 +241,17 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
         error_message.exec_()  
         
     def ui_status_update(self, string):
-        self.status_line.setText(string)
+        #self.status_line.setText(string)
+        self.statusBar.showMessage(string)
         
     def serial_update(self):
         try:
-            if not self.raw_out_checkbox.isChecked():
+            if not self.radioButton_graph.isChecked():
                 if self.ser.in_waiting:
                     i = self.ser.readline().decode('UTF-8').strip('\n')
                     if i == 'T':
                         self.keysend()
             else:
-
                 self.ser.write('\n'.encode())
 
                 # get response from Arduino, terminated by newline character
@@ -251,7 +272,7 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
                 if len(buf) != 3:
                     return
                 current_reading = int(buf)
-                self.graph.add_data(current_reading)
+                self.add_data(current_reading)
 
         except OSError as e:
             logging.warning(e)
@@ -261,14 +282,14 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
     def ui_run(self):
         self.button_pause.setEnabled(True)
         self.button_run.setEnabled(False)
-        self.dropdown_key.setEnabled(False)
+        #self.dropdown_key.setEnabled(False)
         self.ui_status_update("Running")
         self.timer.start(25)
     
     def ui_pause(self):
         self.button_pause.setEnabled(False)
         self.button_run.setEnabled(True)
-        self.dropdown_key.setEnabled(True)
+        #self.dropdown_key.setEnabled(True)
         self.ui_status_update("Paused")
         self.timer.stop()
     
@@ -279,6 +300,19 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
     def _mouse_send(self):
         self.mouse.press(self.current_key)
         self.mouse.release(self.current_key)
+
+    def add_data(self, value):
+        self._data[self._data_index] = value
+        self._data_index = (self._data_index + 1) % self._graph_max_size
+        if self._data_index == 0 and self.checkBox_auto_scale.isChecked():
+            self.graph.enableAutoRange()
+            self.graph.disableAutoRange()
+    def draw_graphs(self):
+        self.curve.setData(numpy.arange(self._data.size), self._data, skipFiniteCheck = True)  
+    def graph_reset(self):
+        self.graph.clear()
+        self.curve = self.graph.plot(numpy.arange(self._graph_max_size), self._data, pen = self.green_pen, skipFiniteCheck = True)
+       
 
 if __name__ == "__main__":
     log_system.init_logging(LOG_LEVEL)
