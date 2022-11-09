@@ -24,14 +24,18 @@ import sys
 import time
 import numpy
 import pynput
-import pyqtgraph as pg
-import pyqtgraph.exporters
 import serial
 import serial.tools.list_ports
+import pyqtgraph as pg
+import pyqtgraph.exporters
 from PyQt5 import QtCore, QtGui, QtWidgets
+from webbrowser import Error as wb_error
+from webbrowser import open as wb_open
 
 # local imports
 from connect import Ui_MainWindow
+from about import Ui_about_window
+from license import Ui_license_window
 
 try:
     # manual includes to fix occasional compile problem
@@ -49,10 +53,39 @@ import log_system
 VERSION = "v1.1.0-a.5"
 LOG_LEVEL = logging.DEBUG
 
+
+# About window. The class is so tiny it might as well be defined here.
+class AboutWindow(QtWidgets.QDialog, Ui_about_window):
+    """
+    About dialog box window.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(AboutWindow, self).__init__(*args, **kwargs)
+        self.setupUi(self)
+        self.version.setText(VERSION)
+        self.icon.setPixmap(QtGui.QPixmap(":/icon/icon.png"))
+        self.setWindowIcon(QtGui.QIcon(':/icon/icon.png'))
+
+
+# Same for license window
+class LicenseWindow(QtWidgets.QDialog, Ui_license_window):
+    """
+    License dialog box window.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(LicenseWindow, self).__init__(*args, **kwargs)
+        self.setupUi(self)
+        self.setWindowIcon(QtGui.QIcon(':/icon/icon.png'))
+
+
 class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
     def __init__(self, *args, obj=None, **kwargs):
         super(ArdConnect, self).__init__(*args, **kwargs)
         self.setupUi(self)
+        self.about_window = AboutWindow()
+        self.license_window = LicenseWindow()
         self.setWindowIcon(QtGui.QIcon(':/icon/icon.png'))
 
         # Button choices
@@ -85,7 +118,11 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
         self.button_run.clicked.connect(self._ui_run)
         self.button_pause.clicked.connect(self._ui_pause)
         self.button_png_export.clicked.connect(self._ui_export_data_png)
-        
+        self.actionAbout.triggered.connect(self._ui_show_about)
+        self.actionLicense.triggered.connect(self._ui_show_license)
+        self.actionGet_Source_Code.triggered.connect(self._open_source_code_webpage)
+        self.actionQuit.triggered.connect(sys.exit)
+                
         # connection status
         self._ser: serial.Serial = serial.Serial(baudrate = 115200, timeout = 1, write_timeout = 1)
         self._com_port = ''
@@ -125,6 +162,19 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
         # set curve
         self._graph_reset()
         self._graph.disableAutoRange()
+
+        # set callbacks for graph mode autorun
+        self._capture_stop: callable  = self._ui_pause
+        self._capture_start: callable = self._ui_run
+
+    def _open_source_code_webpage(self):
+        """Opens a link to the project source code."""
+        try:
+            wb_open("https://github.com/BB121-LAB/arduino_connect", autoraise = True)
+        except wb_error as error:
+            error_msg = "Could not open URL.\n\n" + error
+            logging.warning(error_msg)
+            self.ui_display_error_message("Open URL Error", error_msg)
 
     def _ui_com_connect(self) -> None:
         """
@@ -266,6 +316,15 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
         """Update status bar message."""
         self.statusBar.showMessage(message)
 
+    def _ui_show_about(self):
+        """Shows the About dialog window."""
+        self.about_window.show()
+
+
+    def _ui_show_license(self):
+        """Shows the License dialog window"""
+        self.license_window.show()
+
     def _serial_update(self) -> None:
         """
         Called via QTimer defined in __init__. 
@@ -357,7 +416,7 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
     def _ui_export_data_png(self):
         """Exports a PNG file of the current graph data. Stops and resumes capture after running."""
         capture_running = self._capture_timer.isActive()
-        self._ui_pause()
+        self._capture_stop()
         default_filename = str(time.time()).split('.', maxsplit=1)[0] + '.png'
         filename = QtWidgets.QFileDialog.getSaveFileName(self, "Save File", directory = default_filename)[0]
         if filename:
@@ -369,7 +428,7 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
                 self._ui_display_error_message("Export Error", e)
                 logging.warn(e)
         if capture_running:
-            self._ui_run()
+            self._capture_start()
 
 if __name__ == "__main__":
     log_system.init_logging(LOG_LEVEL)
