@@ -170,7 +170,7 @@
               <item>
                <widget class="QRadioButton" name="radioButton_graph">
                 <property name="text">
-                 <string>Graph mode</string>
+                 <string>Graph Mode</string>
                 </property>
                </widget>
               </item>
@@ -340,7 +340,7 @@
            </widget>
           </item>
           <item>
-           <widget class="QPushButton" name="pushButton">
+           <widget class="QPushButton" name="button_png_export">
             <property name="text">
              <string>PNG</string>
             </property>
