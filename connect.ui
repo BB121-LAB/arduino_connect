@@ -259,7 +259,7 @@
         <number>0</number>
        </property>
        <item>
-        <widget class="QFrame" name="verticalFrame">
+        <widget class="QFrame" name="key_select_frame">
          <property name="frameShape">
           <enum>QFrame::Box</enum>
          </property>

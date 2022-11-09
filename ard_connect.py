@@ -17,7 +17,6 @@
 #  along with this program; if not, write to the Free Software
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
-#  
 
 import logging
 import sys
@@ -33,6 +32,8 @@ from webbrowser import Error as wb_error
 from webbrowser import open as wb_open
 
 # local imports
+import images_qr
+import log_system
 from connect import Ui_MainWindow
 from about import Ui_about_window
 from license import Ui_license_window
@@ -46,20 +47,14 @@ try:
 except:
     pass
 
-# local includes
-import images_qr
-import log_system
 
-VERSION = "v1.1.0-b.1 - BETA BUILD"
+VERSION = "v1.1.0-b.2 - BETA BUILD #1"
 LOG_LEVEL = logging.DEBUG
 
 
 # About window. The class is so tiny it might as well be defined here.
 class AboutWindow(QtWidgets.QDialog, Ui_about_window):
-    """
-    About dialog box window.
-    """
-
+    """About dialog box window."""
     def __init__(self, *args, **kwargs):
         super(AboutWindow, self).__init__(*args, **kwargs)
         self.setupUi(self)
@@ -70,10 +65,7 @@ class AboutWindow(QtWidgets.QDialog, Ui_about_window):
 
 # Same for license window
 class LicenseWindow(QtWidgets.QDialog, Ui_license_window):
-    """
-    License dialog box window.
-    """
-
+    """License dialog box window."""
     def __init__(self, *args, **kwargs):
         super(LicenseWindow, self).__init__(*args, **kwargs)
         self.setupUi(self)
@@ -84,8 +76,8 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
     def __init__(self, *args, obj=None, **kwargs):
         super(ArdConnect, self).__init__(*args, **kwargs)
         self.setupUi(self)
-        self.about_window = AboutWindow()
-        self.license_window = LicenseWindow()
+        self._about_window = AboutWindow()
+        self._license_window = LicenseWindow()
         self.setWindowIcon(QtGui.QIcon(':/icon/icon.png'))
 
         # Button choices
@@ -161,7 +153,7 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
         
         # set curve
         self._graph_reset()
-        self._graph.disableAutoRange()
+        self._graph.disableAutoRange()                      
 
         # set callbacks for graph mode autorun
         self._capture_stop: callable  = self._ui_pause
@@ -235,7 +227,6 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
                         continue
                 if self.radioButton_graph.isChecked():
                     self._ui_run()
-                    self.graph_zoom_frame.setEnabled(True)
 
             except Exception as e:
                 self._com_port = ''
@@ -253,7 +244,6 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
             self._graph_timer.stop()
             if self._capture_timer.isActive():
                 self._ui_pause()
-                self.graph_zoom_frame.setEnabled(False)
             self._ser.close()
             self.dropdown_port.setEnabled(True)
             self.button_refresh.setEnabled(True) 
@@ -318,12 +308,11 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
 
     def _ui_show_about(self):
         """Shows the About dialog window."""
-        self.about_window.show()
-
+        self._about_window.show()
 
     def _ui_show_license(self):
         """Shows the License dialog window"""
-        self.license_window.show()
+        self._license_window.show()
 
     def _serial_update(self) -> None:
         """
