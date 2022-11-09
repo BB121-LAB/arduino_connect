@@ -27,7 +27,7 @@ import pynput
 import serial
 import serial.tools.list_ports
 import pyqtgraph as pg
-import pyqtgraph.exporters
+import pyqtgraph.exporters                  # needed for PNG export option
 from PyQt5 import QtCore, QtGui, QtWidgets
 from webbrowser import Error as wb_error
 from webbrowser import open as wb_open
@@ -50,7 +50,7 @@ except:
 import images_qr
 import log_system
 
-VERSION = "v1.1.0-a.5"
+VERSION = "v1.1.0-b.1 - BETA BUILD"
 LOG_LEVEL = logging.DEBUG
 
 
@@ -122,7 +122,7 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
         self.actionLicense.triggered.connect(self._ui_show_license)
         self.actionGet_Source_Code.triggered.connect(self._open_source_code_webpage)
         self.actionQuit.triggered.connect(sys.exit)
-                
+
         # connection status
         self._ser: serial.Serial = serial.Serial(baudrate = 115200, timeout = 1, write_timeout = 1)
         self._com_port = ''
