@@ -24,4 +24,3 @@ ve-delete:
 	rm -rf ard_connect_build
 build-ui:
 	pyuic5 connect.ui > connect.py
-	pyuic5 graph_ui.ui > graph_ui.py

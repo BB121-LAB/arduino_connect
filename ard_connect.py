@@ -19,23 +19,26 @@
 #  MA 02110-1301, USA.
 #  
 
-
-from PyQt5 import QtCore, QtGui, QtWidgets
-from connect import Ui_MainWindow
-import serial, pynput, sys
-import serial.tools.list_ports
 import logging
+import sys
 import time
 import numpy
+import pynput
 import pyqtgraph as pg
 import pyqtgraph.exporters
+import serial
+import serial.tools.list_ports
+from PyQt5 import QtCore, QtGui, QtWidgets
+
+# local imports
+from connect import Ui_MainWindow
 
 try:
     # manual includes to fix occasional compile problem
-    from pyqtgraph.graphicsItems.ViewBox.axisCtrlTemplate_pyqt5 import *
-    from pyqtgraph.graphicsItems.PlotItem.plotConfigTemplate_pyqt5 import *
-    from pyqtgraph.imageview.ImageViewTemplate_pyqt5 import *
     from pyqtgraph.console.template_pyqt5 import *
+    from pyqtgraph.graphicsItems.PlotItem.plotConfigTemplate_pyqt5 import *
+    from pyqtgraph.graphicsItems.ViewBox.axisCtrlTemplate_pyqt5 import *
+    from pyqtgraph.imageview.ImageViewTemplate_pyqt5 import *
 except:
     pass
 
