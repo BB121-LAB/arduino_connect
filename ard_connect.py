@@ -48,7 +48,7 @@ except:
     pass
 
 
-VERSION = "v1.1.1-b.1"
+VERSION = "v1.1.0-b.3"
 LOG_LEVEL = logging.DEBUG
 
 
