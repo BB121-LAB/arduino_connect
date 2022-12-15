@@ -277,7 +277,7 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
         self.dropdown_port.clear()
         self.available_ports = serial.tools.list_ports.comports()
         for i in self.available_ports:
-            f_check: bool = any(term in i.device for term in filter_list)
+            f_check: bool = any(term in i.device.lower() for term in filter_list)
             if not f_check:
                 self.dropdown_port.addItem(i.device)  
         com_count = self.dropdown_port.count()
