@@ -273,10 +273,13 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
         it's 100% Arduino dependant whether this works or not. 
         """
 
+        filter_list: list = ['bluetooth', 'wifi', 'lan']
         self.dropdown_port.clear()
         self.available_ports = serial.tools.list_ports.comports()
         for i in self.available_ports:
-            self.dropdown_port.addItem(i.device)  
+            f_check: bool = any(term in i.device for term in filter_list)
+            if not f_check:
+                self.dropdown_port.addItem(i.device)  
         com_count = self.dropdown_port.count()
         if com_count == 0:
             self._ui_status_update("No ports found!")
