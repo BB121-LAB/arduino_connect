@@ -346,6 +346,13 @@
             </property>
            </widget>
           </item>
+          <item>
+           <widget class="QPushButton" name="button_csv_export">
+            <property name="text">
+             <string>CSV</string>
+            </property>
+           </widget>
+          </item>
          </layout>
         </widget>
        </item>

@@ -19,6 +19,7 @@
 #  MA 02110-1301, USA.
 
 import logging
+import csv
 import sys
 import time
 import numpy
@@ -48,7 +49,7 @@ except:
     pass
 
 
-VERSION = "v1.1.0-b.3"
+VERSION = "v1.1.0-b.4"
 LOG_LEVEL = logging.DEBUG
 
 
@@ -83,14 +84,14 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
         # Button choices
         self._current_key = None
         self._button_choices = {
-            "Spacebar (default)"    : pynput.keyboard.Key.space,
+            "W (Default)" : 'w',
+            "Spacebar"    : pynput.keyboard.Key.space,
             "Left Click"  : pynput.mouse.Button.left,
             "Right Click" : pynput.mouse.Button.right,
             "Arrow Up"    : pynput.keyboard.Key.up,
             "Arrow Down"  : pynput.keyboard.Key.down,
             "Arrow Left"  : pynput.keyboard.Key.left,
             "Arrow Right" : pynput.keyboard.Key.right,
-            "W"           : 'w',
             "A"           : 'a',
             "S"           : 's',
             "D"           : 'd',
@@ -110,6 +111,7 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
         self.button_run.clicked.connect(self._ui_run)
         self.button_pause.clicked.connect(self._ui_pause)
         self.button_png_export.clicked.connect(self._ui_export_data_png)
+        self.button_csv_export.clicked.connect(self._ui_export_data_csv)
         self.actionAbout.triggered.connect(self._ui_show_about)
         self.actionLicense.triggered.connect(self._ui_show_license)
         self.actionGet_Source_Code.triggered.connect(self._open_source_code_webpage)
@@ -416,6 +418,31 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
                 QtCore.QCoreApplication.processEvents()
                 exporter = pg.exporters.ImageExporter(self._graph.getPlotItem())
                 exporter.export(filename)
+            except Exception as e:
+                self._ui_display_error_message("Export Error", e)
+                logging.warn(e)
+        if capture_running:
+            self._capture_start()
+
+    def _ui_export_data_csv(self):
+        """
+        Exports a CSV file of the currently recorded information, pre-filtered.\n
+        Pauses capture (if running) and shows a file save dialog.\n
+        Resumes capture if itw as running after file is saved or user cancels save..
+        """
+
+        capture_running = self._capture_timer.isActive()
+        self._capture_stop()
+        default_filename = str(time.time()).split('.', maxsplit=1)[0] + '.csv'
+        filename = QtWidgets.QFileDialog.getSaveFileName(self, "Save File", directory = default_filename)[0]
+        if filename:
+            try:
+                QtCore.QCoreApplication.processEvents()
+                csv_file = open(filename, 'w', newline = '')
+                writer = csv.writer(csv_file)
+                writer.writerow(self._data)
+                csv_file.flush()
+                csv_file.close()
             except Exception as e:
                 self._ui_display_error_message("Export Error", e)
                 logging.warn(e)
