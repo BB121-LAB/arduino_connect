@@ -49,7 +49,7 @@ except:
     pass
 
 
-VERSION = "v1.1.2-b.1"
+VERSION = "v1.1.2-b.2"
 LOG_LEVEL = logging.DEBUG
 
 
@@ -132,6 +132,8 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
         self._capture_timer = QtCore.QTimer()
         self._capture_timer.timeout.connect(self._serial_update)
         self._capture_timer.stop()
+        self._capture_no_response = 0
+        self._capture_max_no_response = 25
         
         # port update timer
         self._port_timer = QtCore.QTimer()
@@ -343,6 +345,7 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
                     self._ui_com_connect()
                 else:
                     if running:
+                        self._capture_no_response = 0
                         self._capture_start()
                         self._status_timer.start(1000)
                         self._com_error = False
@@ -393,6 +396,11 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
             #   NNN are three numbers ranging from 0-9
             #   \n as the packet terminator
             else:
+
+                if self._capture_no_response > self._capture_max_no_response:
+                    self._com_error = True
+                    return
+
                 self._ser.write('\n'.encode())
 
                 # get response from Arduino, terminated by newline character
@@ -411,9 +419,11 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
                         break
                     buf = buf + chr
                 if len(buf) != 3:
+                    self._capture_no_response += 1
                     return
                 current_reading = int(buf)
                 self._add_data(current_reading)
+                self._capture_no_response = 0
 
         except OSError as e:
             logging.warning(e)
