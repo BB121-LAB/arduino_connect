@@ -23,7 +23,7 @@ def exception_handler_hook(ex_type, ex_val, ex_tb):
     print(''.join(traceback.format_exception(ex_type, ex_val, ex_tb)))
 
 def init_logging(log_level: int = logging.INFO):
-    lfmt = "%(levelname)s [%(funcName)s]: %(message)s"
+    lfmt = "%(levelname)s %(asctime)s [%(funcName)s]: %(message)s"
     log_file_name = 'ard_connect.log'
     log_file_path = ''
     if hasattr(sys, "_MEIPASS"):
