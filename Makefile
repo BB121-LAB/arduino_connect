@@ -22,3 +22,7 @@ ve-build:
 	deactivate
 ve-delete:
 	rm -rf ard_connect_build
+build-ui:
+	pyuic5 connect.ui > connect.py
+	pyuic5 about.ui > about.py
+	pyuic5 license.ui > license.py
