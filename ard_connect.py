@@ -169,7 +169,7 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
         self._capture_stop: callable  = self._ui_pause
         self._capture_start: callable = self._ui_run
 
-    def _open_source_code_webpage(self):
+    def _open_source_code_webpage(self) -> None:
         """Opens a link to the project source code."""
         try:
             wb_open("https://github.com/BB121-LAB/arduino_connect", autoraise = True)
@@ -179,6 +179,11 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
             self.ui_display_error_message("Open URL Error", error_msg)
 
     def _send_mode(self) -> bool:
+        """Sends the operational mode to the Arduino. On boot, the Arduino will expect an
+        operation code to be sent from the program. This must be completed before the 
+        Arduino can begin capturing data. Returns false if the Arduino signals an invalid
+        option."""
+
         self._ser.flushInput()
         logging.info("Sending mode...")
         if self.radioButton_graph.isChecked():
@@ -224,12 +229,13 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
                 if self.radioButton_graph.isChecked():
                     self._graph_timer.start(self._graph_timer_ms)      
                 else:
-                    self.frame_run_pause_2.setEnabled(True)              
+                    self.frame_run_pause_2.setEnabled(True)       
+
+                # Begin attempting the connection to the arduino
+                # This normally takes several tries to work.
                 connect_attempts = 3
                 time.sleep(2)
                 while True:
-                    # Begin attempting the connection to the arduino
-                    # This normally takes several tries to work.
                     if(self._send_mode()):
                         break
                     connect_attempts -= 1
@@ -244,7 +250,6 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
                     self._ui_run()
                 logging.debug("Starting status timer...")
                 self._status_timer.start(1000)
-
             except Exception as e:
                 self._com_port = ''
                 logging.warning(f"Connection Error: {e}")
@@ -257,7 +262,9 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.mode_select_frame.setEnabled(True)
                 self._port_timer.start(10000)
                 self._status_timer.stop()
-                self._ui_com_refresh()     
+                self._ui_com_refresh()  
+
+        # if an arduino is connected, disconnect the device and reset internal state   
         else:
             logging.info("Disconnecting from serial device (called from UI)")
             self._graph_timer.stop()
@@ -275,7 +282,9 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
             self.button_connect.setText("Connect")
 
     def _ui_change_key(self, i: str) -> None:
-        """When the dropdown choice has changed, update the key to output."""
+        """When the dropdown choice has changed, update the key to output. This may involve changing
+        methods if the user switches from a key to a mouse button, or vice versa."""
+
         key = list(self._button_choices.keys())[i]
         self._ui_status_update("Key changed to " + key.lower())
         self._current_key = self._button_choices[key]
@@ -290,7 +299,7 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
         the dropdown with the results. Unfortunately, Arduinos may
         or may not show the correct USB descriptor to the operating system.
         It will try to default to any USB descriptor named "Arduino," but
-        it's 100% Arduino dependant whether this works or not. 
+        it's 100% Arduino-manufacturer dependant whether this works or not. 
         """
 
         filter_list: list = ['bluetooth', 'wifi', 'lan']
@@ -318,16 +327,21 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.dropdown_port.setCurrentIndex(index)
                 break
     
-    # check if Arduino has rebooted and attempt to restore mode if it has
     def _check_serial_status(self) -> bool:
+        """Check if the Arduino has rebooted and, if it has, attempt to restore the previous session.
+        Currently, if the Arduino has been rebooted, it will wait for a boot signal from the program.
+        The boot signal is prefixed by '$'. So, we send in invalid boot code to the Arduino periodically.
+        If the Arduino is working normally, it will ignore the boot code. If it has rebooted, it will 
+        return a 'INVALID' packet response."""
+
         logging.debug("STATUS CHECK")
         if self._com_error:
             logging.warn("self._com_error flag = True")
-        self._ser.write('$.\n'.encode())
+        self._ser.write('$.\n'.encode())                                    # send invalid boot code
         if self._ser.in_waiting or self._com_error:
             response = self._ser.read_all().decode('UTF-8').strip('\r\n')
             logging.debug(f"Status response: {response}")
-            if "INVALID" in response or self._com_error:
+            if "INVALID" in response or self._com_error:                    # if INVALID is recieved, Arduino has rebooted
                 self._status_timer.stop()
                 running = False
                 if self.button_run.isEnabled:
