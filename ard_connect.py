@@ -19,6 +19,7 @@
 #  MA 02110-1301, USA.
 
 import logging
+import csv
 import sys
 import time
 import numpy
@@ -48,7 +49,7 @@ except:
     pass
 
 
-VERSION = "v1.1.0-b.2 - BETA BUILD #1"
+VERSION = "v1.1.2-b.2"
 LOG_LEVEL = logging.DEBUG
 
 
@@ -83,14 +84,14 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
         # Button choices
         self._current_key = None
         self._button_choices = {
-            "Spacebar (default)"    : pynput.keyboard.Key.space,
+            "W (Default)" : 'w',
+            "Spacebar"    : pynput.keyboard.Key.space,
             "Left Click"  : pynput.mouse.Button.left,
             "Right Click" : pynput.mouse.Button.right,
             "Arrow Up"    : pynput.keyboard.Key.up,
             "Arrow Down"  : pynput.keyboard.Key.down,
             "Arrow Left"  : pynput.keyboard.Key.left,
             "Arrow Right" : pynput.keyboard.Key.right,
-            "W"           : 'w',
             "A"           : 'a',
             "S"           : 's',
             "D"           : 'd',
@@ -110,6 +111,7 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
         self.button_run.clicked.connect(self._ui_run)
         self.button_pause.clicked.connect(self._ui_pause)
         self.button_png_export.clicked.connect(self._ui_export_data_png)
+        self.button_csv_export.clicked.connect(self._ui_export_data_csv)
         self.actionAbout.triggered.connect(self._ui_show_about)
         self.actionLicense.triggered.connect(self._ui_show_license)
         self.actionGet_Source_Code.triggered.connect(self._open_source_code_webpage)
@@ -118,6 +120,7 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
         # connection status
         self._ser: serial.Serial = serial.Serial(baudrate = 115200, timeout = 1, write_timeout = 1)
         self._com_port = ''
+        self._com_error = False
         
         # disable controls until connected
         self.frame_run_pause_2.setEnabled(False)
@@ -129,11 +132,18 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
         self._capture_timer = QtCore.QTimer()
         self._capture_timer.timeout.connect(self._serial_update)
         self._capture_timer.stop()
+        self._capture_no_response = 0
+        self._capture_max_no_response = 25
         
         # port update timer
         self._port_timer = QtCore.QTimer()
         self._port_timer.timeout.connect(self._ui_com_refresh)
         self._port_timer.start(10000)
+
+        # arduino status check timer
+        self._status_timer = QtCore.QTimer()
+        self._status_timer.timeout.connect(self._check_serial_status)
+        self._status_timer.stop()
 
         # graph timer
         self._graph_timer = QtCore.QTimer()
@@ -159,7 +169,7 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
         self._capture_stop: callable  = self._ui_pause
         self._capture_start: callable = self._ui_run
 
-    def _open_source_code_webpage(self):
+    def _open_source_code_webpage(self) -> None:
         """Opens a link to the project source code."""
         try:
             wb_open("https://github.com/BB121-LAB/arduino_connect", autoraise = True)
@@ -167,6 +177,30 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
             error_msg = "Could not open URL.\n\n" + error
             logging.warning(error_msg)
             self.ui_display_error_message("Open URL Error", error_msg)
+
+    def _send_mode(self) -> bool:
+        """Sends the operational mode to the Arduino. On boot, the Arduino will expect an
+        operation code to be sent from the program. This must be completed before the 
+        Arduino can begin capturing data. Returns false if the Arduino signals an invalid
+        option."""
+
+        self._ser.flushInput()
+        logging.info("Sending mode...")
+        if self.radioButton_graph.isChecked():
+            self._ser.write('$WAVE\n'.encode('UTF-8'))
+            self._ser.flushOutput()                  
+            time.sleep(1)
+        else:
+            self._ser.write('$NORMAL\n'.encode('UTF-8'))
+            self._ser.flushOutput()
+            time.sleep(1)
+        if self._ser.in_waiting:
+            response = self._ser.read_all().decode('UTF-8').strip('\r\n')
+            print(response)
+            if "INVALID" in response:
+                return False
+            else:
+                return True
 
     def _ui_com_connect(self) -> None:
         """
@@ -180,13 +214,14 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
             try:
                 self._ui_status_update("Connecting...")
                 self._com_port = self.dropdown_port.currentText()
-                self._ser = serial.Serial(self._com_port, 115200)
+                self._ser = serial.Serial(self._com_port, 115200, write_timeout = 3)
                 self.button_connect.setText("Disconnect")
                 self.dropdown_port.setEnabled(False)
                 self.button_refresh.setEnabled(False)
                 self.button_pause.setEnabled(False)
                 self.button_run.setEnabled(True)
                 self._port_timer.stop()
+                self._com_error = False
                 self.mode_select_frame.setEnabled(False)
                 self._ui_status_update("Connected")
                 self._ser.flush()
@@ -194,32 +229,18 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
                 if self.radioButton_graph.isChecked():
                     self._graph_timer.start(self._graph_timer_ms)      
                 else:
-                    self.frame_run_pause_2.setEnabled(True)              
+                    self.frame_run_pause_2.setEnabled(True)       
+
+                # Begin attempting the connection to the arduino
+                # This normally takes several tries to work.
                 connect_attempts = 3
                 time.sleep(2)
                 while True:
-
-                    # Begin attempting the connection to the arduino
-                    # This normally takes several tries to work.
-                    self._ser.flushInput()
-                    print("Sending mode...")
-                    if self.radioButton_graph.isChecked():
-                        self._ser.write('$WAVE\n'.encode('UTF-8'))
-                        self._ser.flushOutput()                  
-                        time.sleep(1)
-                    else:
-                        self._ser.write('$NORMAL\n'.encode('UTF-8'))
-                        self._ser.flushOutput()
-                        time.sleep(1)
-                    if self._ser.in_waiting:
-                        response = self._ser.read_all().decode('UTF-8').strip('\r\n')
-                        print(response)
-                        if "INVALID" in response:
-                            continue
+                    if(self._send_mode()):
                         break
                     connect_attempts -= 1
                     if connect_attempts <= 0:
-                        print("Resetting serial device...")
+                        logging.info("Resetting serial device...")
                         self._ser.close()
                         self._ser = serial.Serial(self._com_port, 115200)
                         connect_attempts = 3
@@ -227,7 +248,8 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
                         continue
                 if self.radioButton_graph.isChecked():
                     self._ui_run()
-
+                logging.debug("Starting status timer...")
+                self._status_timer.start(1000)
             except Exception as e:
                 self._com_port = ''
                 logging.warning(f"Connection Error: {e}")
@@ -239,8 +261,12 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.frame_run_pause_2.setEnabled(False)   
                 self.mode_select_frame.setEnabled(True)
                 self._port_timer.start(10000)
-                self._ui_com_refresh()     
+                self._status_timer.stop()
+                self._ui_com_refresh()  
+
+        # if an arduino is connected, disconnect the device and reset internal state   
         else:
+            logging.info("Disconnecting from serial device (called from UI)")
             self._graph_timer.stop()
             if self._capture_timer.isActive():
                 self._ui_pause()
@@ -250,12 +276,15 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
             self.frame_run_pause_2.setEnabled(False)   
             self.mode_select_frame.setEnabled(True)
             self._port_timer.start(10000) 
+            self._status_timer.stop()
             self._ui_com_refresh()     
             self._ui_status_update("Disconnected")    
             self.button_connect.setText("Connect")
 
     def _ui_change_key(self, i: str) -> None:
-        """When the dropdown choice has changed, update the key to output."""
+        """When the dropdown choice has changed, update the key to output. This may involve changing
+        methods if the user switches from a key to a mouse button, or vice versa."""
+
         key = list(self._button_choices.keys())[i]
         self._ui_status_update("Key changed to " + key.lower())
         self._current_key = self._button_choices[key]
@@ -270,13 +299,16 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
         the dropdown with the results. Unfortunately, Arduinos may
         or may not show the correct USB descriptor to the operating system.
         It will try to default to any USB descriptor named "Arduino," but
-        it's 100% Arduino dependant whether this works or not. 
+        it's 100% Arduino-manufacturer dependant whether this works or not. 
         """
 
+        filter_list: list = ['bluetooth', 'wifi', 'lan']
         self.dropdown_port.clear()
         self.available_ports = serial.tools.list_ports.comports()
         for i in self.available_ports:
-            self.dropdown_port.addItem(i.device)  
+            f_check: bool = any(term in i.device.lower() for term in filter_list)
+            if not f_check:
+                self.dropdown_port.addItem(i.device)  
         com_count = self.dropdown_port.count()
         if com_count == 0:
             self._ui_status_update("No ports found!")
@@ -294,17 +326,56 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
                 index = self.dropdown_port.findText(self._com_port)
                 self.dropdown_port.setCurrentIndex(index)
                 break
+    
+    def _check_serial_status(self) -> bool:
+        """Check if the Arduino has rebooted and, if it has, attempt to restore the previous session.
+        Currently, if the Arduino has been rebooted, it will wait for a boot signal from the program.
+        The boot signal is prefixed by '$'. So, we send in invalid boot code to the Arduino periodically.
+        If the Arduino is working normally, it will ignore the boot code. If it has rebooted, it will 
+        return a 'INVALID' packet response."""
+
+        logging.debug("STATUS CHECK")
+        if self._com_error:
+            logging.warn("self._com_error flag = True")
+        self._ser.write('$.\n'.encode())                                    # send invalid boot code
+        if self._ser.in_waiting or self._com_error:
+            response = self._ser.read_all().decode('UTF-8').strip('\r\n')
+            logging.debug(f"Status response: {response}")
+            if "INVALID" in response or self._com_error:                    # if INVALID is recieved, Arduino has rebooted
+                self._status_timer.stop()
+                running = False
+                if self.button_run.isEnabled:
+                    self._capture_stop()
+                    running = True
+                logging.warn(f"Arduino returned status: {response}")
+                logging.warn("Arduino has rebooted, attempting to restore mode...")
+                status = False
+                for _ in range(5):
+                    status = self._send_mode()
+                    if status:
+                        break
+                if not status:
+                    self._ui_display_error_message("Connection Error", "Arduino operation mode could not be restored.")
+                    self._ui_com_connect()
+                else:
+                    if running:
+                        self._capture_no_response = 0
+                        self._capture_start()
+                        self._status_timer.start(1000)
+                        self._com_error = False
 
     def _ui_display_error_message(self, title: str, msg: str) -> None:
         """Display a generic error message to the user."""
         error_message = QtWidgets.QMessageBox()
         error_message.setWindowTitle(title)
         error_message.setText(str(msg))
+        logging.error(f"Error window opened with content: {title} - {msg}")
         error_message.exec_()   
 
     def _ui_status_update(self, message: str) -> None:
         """Update status bar message."""
         self.statusBar.showMessage(message)
+        logging.debug(message)
 
     def _ui_show_about(self):
         """Shows the About dialog window."""
@@ -326,8 +397,12 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
             if not self.radioButton_graph.isChecked():
                 if self._ser.in_waiting:
                     i = self._ser.readline().decode('UTF-8').strip('\n')
+                    logging.debug(f"{i}")
                     if i == 'T':
                         self._keysend()
+                    elif "INVALID" in i:
+                        self._com_error = True
+
 
             # if in Graph Mode, expect a packet containing the current analog reading.
             # Packet format: $NNN\n
@@ -335,6 +410,11 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
             #   NNN are three numbers ranging from 0-9
             #   \n as the packet terminator
             else:
+
+                if self._capture_no_response > self._capture_max_no_response:
+                    self._com_error = True
+                    return
+
                 self._ser.write('\n'.encode())
 
                 # get response from Arduino, terminated by newline character
@@ -353,9 +433,12 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
                         break
                     buf = buf + chr
                 if len(buf) != 3:
+                    self._capture_no_response += 1
                     return
                 current_reading = int(buf)
                 self._add_data(current_reading)
+                self._capture_no_response = 0
+
         except OSError as e:
             logging.warning(e)
             self._ui_display_error_message("Device Disconnected", f"The USB device has been disconnected.\n{e}")
@@ -413,6 +496,31 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
                 QtCore.QCoreApplication.processEvents()
                 exporter = pg.exporters.ImageExporter(self._graph.getPlotItem())
                 exporter.export(filename)
+            except Exception as e:
+                self._ui_display_error_message("Export Error", e)
+                logging.warn(e)
+        if capture_running:
+            self._capture_start()
+
+    def _ui_export_data_csv(self):
+        """
+        Exports a CSV file of the currently recorded information, pre-filtered.\n
+        Pauses capture (if running) and shows a file save dialog.\n
+        Resumes capture if itw as running after file is saved or user cancels save..
+        """
+
+        capture_running = self._capture_timer.isActive()
+        self._capture_stop()
+        default_filename = str(time.time()).split('.', maxsplit=1)[0] + '.csv'
+        filename = QtWidgets.QFileDialog.getSaveFileName(self, "Save File", directory = default_filename)[0]
+        if filename:
+            try:
+                QtCore.QCoreApplication.processEvents()
+                csv_file = open(filename, 'w', newline = '')
+                writer = csv.writer(csv_file)
+                writer.writerow(self._data)
+                csv_file.flush()
+                csv_file.close()
             except Exception as e:
                 self._ui_display_error_message("Export Error", e)
                 logging.warn(e)
