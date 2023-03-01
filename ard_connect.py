@@ -49,8 +49,8 @@ except:
     pass
 
 
-VERSION = "v1.1.2-b.2"
-LOG_LEVEL = logging.DEBUG
+VERSION = "v1.1.2"
+LOG_LEVEL = logging.INFO
 
 
 # About window. The class is so tiny it might as well be defined here.
