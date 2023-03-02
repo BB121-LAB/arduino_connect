@@ -51,6 +51,7 @@ except:
 
 VERSION = "v1.1.2"
 LOG_LEVEL = logging.INFO
+ARDUINO_COMPATIBLE_VERSION: list = ['1.3']
 
 
 # About window. The class is so tiny it might as well be defined here.
@@ -176,7 +177,46 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
         except wb_error as error:
             error_msg = "Could not open URL.\n\n" + error
             logging.warning(error_msg)
-            self.ui_display_error_message("Open URL Error", error_msg)
+            self._ui_display_error_message("Open URL Error", error_msg)
+
+    def _check_arduino_version(self) -> bool:
+        """Checks to see if the Arduino sketch is compatible with this version of the 
+        program. The compatible version are defined in ARDUINO_COMPATIBLE_VERSION. 
+        Returns True if the sketch is compatible. Returns false if the sketch is 
+        incompatible or if the Arduino communication times out."""
+
+        for i in range(3):
+            self._ser.write("$VERSION\n".encode('UTF-8'))
+            self._ser.flushOutput()
+            time.sleep(1)
+            response = self._ser.read_all().decode('UTF-8').strip('\r\n')
+            logging.debug(response)
+
+            # if the Arduino version doesn't handle a version request, it's automatically
+            # out of date.
+            if "INVALID" in response:
+                return False
+
+            # attempt to convert the response into a number. If it fails, either the response
+            # was invalid or some other problem happened.
+            try:
+                float(response)
+
+                # if conversion was succesful, check to see if its in range
+                if response in ARDUINO_COMPATIBLE_VERSION:
+                    return True
+                else:
+                    self._ui_display_error_message("Incompatible Arduino sketch version", """The arduino sketch 
+                        uploaded is incompatible with this version of the Arduino Connect program. Please reflash
+                        the Arduino with the latest sketch version. This should be included in the pack, but can
+                        be obtained from the Github repository (Click on Help -> Get Source Code).""")
+                    return False
+            except Exception as e:
+                logging.debug(e)
+                continue
+        
+        # if we reach this point, the Arduino has failed to submit its version identifier.
+        return False
 
     def _send_mode(self) -> bool:
         """Sends the operational mode to the Arduino. On boot, the Arduino will expect an
@@ -196,7 +236,7 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
             time.sleep(1)
         if self._ser.in_waiting:
             response = self._ser.read_all().decode('UTF-8').strip('\r\n')
-            print(response)
+            logging.debug(response)
             if "INVALID" in response:
                 return False
             else:
@@ -212,6 +252,8 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
 
         if not self._ser.isOpen():
             try:
+
+                # set internal state and open connection to Arduino
                 self._ui_status_update("Connecting...")
                 self._com_port = self.dropdown_port.currentText()
                 self._ser = serial.Serial(self._com_port, 115200, write_timeout = 3)
@@ -231,13 +273,16 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
                 else:
                     self.frame_run_pause_2.setEnabled(True)       
 
-                # Begin attempting the connection to the arduino
                 # This normally takes several tries to work.
                 connect_attempts = 3
                 time.sleep(2)
                 while True:
-                    if(self._send_mode()):
-                        break
+                    if connect_attempts > 0:
+                        if not self._check_arduino_version(): 
+                            connect_attempts -= 1
+                            continue
+                        if self._send_mode():
+                            break
                     connect_attempts -= 1
                     if connect_attempts <= 0:
                         logging.info("Resetting serial device...")
@@ -246,8 +291,12 @@ class ArdConnect(QtWidgets.QMainWindow, Ui_MainWindow):
                         connect_attempts = 3
                         time.sleep(2)
                         continue
+                
+                # auto-run if we're in graph mode
                 if self.radioButton_graph.isChecked():
                     self._ui_run()
+
+                # begin auto-check routine
                 logging.debug("Starting status timer...")
                 self._status_timer.start(1000)
             except Exception as e:
