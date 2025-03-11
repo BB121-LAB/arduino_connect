@@ -1,6 +1,15 @@
+.ONESHELL:
+
+U_NAME = $(shell uname -a)
+
 all:
 	make premake
-	python3 -m PyInstaller --clean --name="Arduino Connect" --windowed --onedir --icon=icon/icon.png ard_connect.py 
+	if [ "$(U_NAME)" == "Darwin" ]; then \
+		PYINSTALLER_FLAG="--onedir"; \
+	else \
+		PYINSTALLER_FLAG="--onefile"; \
+	fi
+	python3 -m PyInstaller --clean --name="Arduino Connect" --windowed $$PYINSTALLER_FLAG --icon=icon/icon.png ard_connect.py
 onefile:
 	make premake
 	python3 -m PyInstaller --onefile ard_connect.py

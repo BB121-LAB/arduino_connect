@@ -4,3 +4,4 @@ __pycache__/
 *.spec
 old_builds/
 *.log
+Makefile
